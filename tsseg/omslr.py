@@ -1,6 +1,6 @@
 import numpy as np
 
-def iter_sigma(x, get_mean=True, get_alpha_beta=True):
+def iter_sigma(x:list, get_mean:bool=True, get_alpha_beta=True):
     '''
     iter_sigma(x, [get_alpha_beta=False])
     iteractive sigma caculation, given a time-series data vector
@@ -8,10 +8,23 @@ def iter_sigma(x, get_mean=True, get_alpha_beta=True):
 
     input:
         x [list]: Time-series data
+        get_mean [bool]: when it's True, sigman would be mean-square-error of sub-time-series data. 
+                        If False, sigma is sum-square-error
         get_alpha_beta [bool default False]: return more detail matrix or not
     return:
         sigma: 2D matrix for error
 
+    example:
+        sigma = iter_sigma([8,1,5,4,3,6,9], True, False) # get mse matrix simply
+        ### or ###
+        sigma, beta, alpha = iter_sigma([8,1,5,4,3,6,9], True, True) # for trace more information
+       
+    Tip:
+        get_mean usage:
+        when we set get_mean as False, the matrix presents sum-square-error
+        which means the error of a longer segment would be larger in usually
+        
+        once we set get_mean sa True, the matrix presents mean-square-error normally
     '''
     def x_bar(i,j): return sum(x[i:j+1])/len(x[i:j+1])
     def t_bar(i,j): return (i+j)/2
@@ -53,15 +66,33 @@ def iter_sigma(x, get_mean=True, get_alpha_beta=True):
                 sigma[i,j] = r_mat[i,j] /(j-i+1)
             else:
                 sigma[i,j] = r_mat[i,j]
-    # sigma = np.abs(np.round(sigma, 4))
+
     sigma = sigma.clip(min=0)
     if get_alpha_beta:
         return sigma, b_mat, a_mat
     else:
-        # return xb_mat
         return sigma
 
-def omslr_gmse(x, max_k, sigma):
+def omslr_gmse(x:list, max_k:int, sigma:numpy):
+    '''
+    omslr_gmse(x:list, max_k:int, sigma:numpy.array)
+    Optimal Multi-Segmentation Linear Regression with global mean-square-error policy:
+    optimized with minimizing the sum
+    input:
+        x[list] - time series data, should be and array of numeric data
+        max_k[int]: number of segmentation, notice that all the k less than max_k are finished after this procedure
+        sigma[numpy.array]: sigma matrix, calculated from iter_sigma
+    return 
+        gamma[list<2D>]: segmentation pivot matrix
+        rho[list<2D>]: segmentation error matrix
+        
+    example:
+        tsdata = [8,1,5,4,3,6,9]
+        sigma = iter_sigma(tsdata, get_mean=False, get_alpha_beta=False) # get mse matrix simply
+        gamma, rho = omslr_gmse(tsdata, 3, sigma)
+        ## get_mean=False cause it's "global", that means sumation contain call the residuals 
+        ## (can devided by len(tsdata) but not necessary)
+    '''
     i = 0
     rho = []
     gamma = []
@@ -92,7 +123,23 @@ def omslr_gmse(x, max_k, sigma):
     return gamma, rho
 
 
-def omslr_minmax(x, max_k, sigma):
+def omslr_minmax(x:list, max_k:int, sigma:numpy.array):
+    '''
+    omslr_minmax(x:list, max_k:int, sigma:numpy.array)
+    Optimal Multi-Segmentation Linear Regression with min-max policy:
+    optimized with minimizing the max-error in segments
+    input:
+        x[list] - time series data, should be and array of numeric data
+        max_k[int]: number of segmentation, notice that all the k less than max_k are finished after this procedure
+        sigma[numpy.array]: sigma matrix, calculated from iter_sigma
+    return 
+        gamma[list<2D>]: segmentation pivot matrix
+        rho[list<2D>]: segmentation error matrix
+    example:
+        tsdata = [8,1,5,4,3,6,9]
+        sigma = iter_sigma(tsdata, get_mean_True, get_alpha_beta=False) # get mse matrix simply
+        gamma, rho = omslr_gmse(tsdata, 3, sigma)
+    '''
     i = 0
     rho = []
     gamma = []
@@ -125,6 +172,13 @@ def omslr_minmax(x, max_k, sigma):
     return gamma, rho
 
 def get_pivots(gamma, p=-1):
+    '''
+    get_pivots(gamma)
+    gamma[numpy.array(2D)]: generate from omslr_gmse function
+    p[int]: get less segmentation pivots (p should less than number of rows in gamma)
+    return[list(1D)]:
+        segmentation pivots
+    '''
     p = gamma[p][-1]
     pivots = [p]
     for i in reversed(range(1, len(gamma)-1)):
